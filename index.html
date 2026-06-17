@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SteerDuplex - Controllable Bidirectional Text Generation</title>
+    <title>SteerDuplex - Steerable Duplex Speech Dialogue Models</title>
     <style>
         * {
             margin: 0;
@@ -216,6 +216,11 @@
             color: #2e7d32;
         }
 
+        .proprietary-row td {
+            color: #888;
+            font-style: italic;
+        }
+
         .score {
             text-align: center;
             font-family: 'Courier New', monospace;
@@ -248,45 +253,10 @@
             font-weight: bold;
         }
 
-        .task-comparison {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
-        }
-
-        .task-card {
-            background: #f8f9fa;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            padding: 20px;
-        }
-
-        .task-card h4 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }
-
-        .task-metric {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .task-metric:last-child {
-            border-bottom: none;
-        }
-
-        .task-metric-label {
-            font-weight: 600;
-            color: #555;
-        }
-
-        .task-metric-value {
-            color: #764ba2;
-            font-weight: bold;
+        .table-note {
+            font-size: 0.85em;
+            color: #777;
+            margin-top: -10px;
         }
 
         @media (max-width: 768px) {
@@ -320,7 +290,7 @@
 <body>
     <header>
         <h1>SteerDuplex</h1>
-        <p>Controllable Bidirectional Text Generation with Preference Steering</p>
+        <p>Steerable Duplex Speech Dialogue Models</p>
     </header>
 
     <div class="container">
@@ -328,10 +298,13 @@
         <section>
             <h2>Abstract</h2>
             <p>
-                SteerDuplex presents a novel approach to controllable text generation that leverages bidirectional modeling for enhanced control and coherence. This work introduces methods for steering language models in both forward and backward directions, enabling fine-grained control over generated content through preference-based constraints.
+                Full-duplex spoken dialogue models are increasingly competent at low-latency turn-taking, interruption handling, and backchanneling, yet a key capability remains underexplored: <em>steerability</em>—the ability to reliably shift conversational behavior along target attributes such as tone, persona, speaking speed, voice style, and mid-conversation edits in response to user instructions. We present the first systematic empirical analysis of steerability in current full-duplex models and find that they fall substantially short on both text-based and audio-based steering despite their strong interactive behavior.
+            </p>
+            <p>
+                To close this gap we introduce <strong>SteerDuplex</strong>, a reinforcement-learning post-training method that couples Group Relative Policy Optimization with a composite reward mixing (i) audio-aware rubric scores judged jointly over the generated speech and its transcript with (ii) programmatically verifiable signals on objectively measurable attributes. Alongside the method we release <strong>SteerBench</strong>, a hand-graded benchmark of 390 spoken prompts and 1,067 binary audio and text rubrics covering tone, persona, style/accent, and speed/length.
             </p>
             <div class="highlight">
-                <strong>Key Innovation:</strong> A dual-directional generation framework that combines forward and backward language modeling to achieve superior controllability while maintaining natural language quality.
+                <strong>Key Innovation:</strong> A composite, multiplicatively-gated reward that combines audio-aware LLM rubrics with verifiable signals and audio-health gates—so that a severe failure in steerability, safety, timing, or audio quality cannot be hidden by a strong score elsewhere. No isolated reward family suffices; the composition is what produces stable steerability gains without breaking the streaming interface.
             </div>
         </section>
 
@@ -340,20 +313,20 @@
             <h2>Main Contributions</h2>
             <div class="features">
                 <div class="feature-card">
-                    <h4>📊 Bidirectional Architecture</h4>
-                    <p>Novel framework combining forward and backward language modeling for improved control mechanisms.</p>
+                    <h4>📏 SteerBench</h4>
+                    <p>The first benchmark for steerability in full-duplex spoken dialogue: 390 prompts and 1,067 hand-written rubrics grading both content and delivery against per-prompt reference clips across tone, persona, style/accent, and speed/length.</p>
                 </div>
                 <div class="feature-card">
-                    <h4>🎯 Preference Steering</h4>
-                    <p>Efficient methods for incorporating user preferences and constraints into the generation process.</p>
+                    <h4>🎯 SteerDuplex Recipe</h4>
+                    <p>A small-step, KL-constrained RL recipe coupling MO-GRPO with a multiplicative composite reward over LLM rubrics (text and reference-anchored audio), verifiable signals (IFEval, safety, latency, FDB timing), and audio-health gates (DNSMOS, silence/clipping/RMS).</p>
                 </div>
                 <div class="feature-card">
-                    <h4>✨ Quality & Controllability</h4>
-                    <p>Achieves high-quality text generation while maintaining precise control over output characteristics.</p>
+                    <h4>🔬 Reward-Hacking Analysis</h4>
+                    <p>Single-family reward probes show no isolated reward suffices: each reaches high scalar reward while collapsing duplex-FDB to zero and leaving 26–49% of rollouts empty, whereas the composite cuts the empty rate to 4% and preserves duplex behavior.</p>
                 </div>
                 <div class="feature-card">
-                    <h4>🔬 Comprehensive Evaluation</h4>
-                    <p>Extensive experimental validation on multiple tasks and datasets demonstrating effectiveness.</p>
+                    <h4>📈 State-of-the-Art Open Source</h4>
+                    <p>SteerDuplex improves the strongest open-source duplex baselines by +22.8 points on SteerBench APR and +7.9 points on Audio MultiChallenge ARS while remaining competitive on Full-Duplex-Bench v1/v2 and VoiceBench.</p>
                 </div>
             </div>
         </section>
@@ -361,20 +334,23 @@
         <!-- Technical Approach Section -->
         <section>
             <h2>Technical Approach</h2>
-            <h3>Bidirectional Generation Framework</h3>
+            <h3>Backbone &amp; Conditioning</h3>
             <p>
-                SteerDuplex leverages a dual-model architecture that processes text bidirectionally. The forward model generates content while the backward model provides contextual constraints, enabling sophisticated control mechanisms.
+                SteerDuplex is a post-training recipe, not a new architecture. It keeps the Moshi-style full-duplex backbone (Défossez et al., 2024)—three jointly modeled streams (user audio, agent audio, agent text), hierarchical audio tokens, and a time-aligned Inner Monologue text channel at ~200ms latency. A natural-language steerability system prompt is prepended to the agent-text stream at the start of every dialogue; both audio streams stay silent during the prefix, and the same layout is used in SFT, RL, and inference to avoid train/deploy distribution shift.
             </p>
-            <h3>Preference Steering Mechanism</h3>
+            <h3>MO-GRPO Optimization</h3>
             <p>
-                The steering mechanism allows users to specify high-level preferences and constraints that guide the generation process. This is achieved through a preference encoding module that integrates user specifications into the generation pipeline.
+                Post-training uses on-policy, group-relative reinforcement learning. The default variant is Multi-Objective GRPO, which z-scores each reward component within the group and adds a 1/√K factor for a K-component reward so the magnitude of the combined advantage stays stable as components are added or removed—the only variant whose update magnitude remains stable across the reward sweep.
             </p>
-            <h3>Key Technical Features</h3>
+            <h3>Composite Reward</h3>
+            <p>
+                The reward has three families: audio-aware rubric rewards scored by a frontier multimodal judge over text and delivery; verifiable rewards covering IFEval-style constraints, safety refusal, word-count and words-per-minute targets, response latency, and FDB-style timing; and audio-health rewards combining clipping, silence, RMS, minimum-duration gates, and DNSMOS. Aggregation is multiplicative, so a silent, mistimed, unsafe, or off-instruction rollout cannot be rescued by a high score on any single component. A reference-audio clip anchors each audio-steering reward, turning subjective style judgments ("cheerful", "formal") into paired comparisons against a fixed target.
+            </p>
+            <h3>Training Setup</h3>
             <ul>
-                <li>Efficient bidirectional inference mechanism</li>
-                <li>Preference encoding and integration layer</li>
-                <li>Joint optimization of forward and backward models</li>
-                <li>Scalable implementation for large language models</li>
+                <li>SFT on 7,024.6 hours of curated synthetic and natural conversational speech (13.7-hour validation split), full fine-tuning on 8 NVIDIA H100 GPUs with AdamW at learning rate 1×10⁻⁵.</li>
+                <li>RL on 2,000 curated multi-turn scenarios: full-parameter MO-GRPO at learning rate 2×10⁻⁷, group size G=16, 6 prompts per iteration, 40 iterations.</li>
+                <li>Adaptive KL control around target 0.10 (β₀=0.08), PPO clip 0.18, multiplicative reward aggregation by default.</li>
             </ul>
         </section>
 
@@ -382,215 +358,272 @@
         <section>
             <h2>Experimental Results</h2>
             <p>
-                Our experiments demonstrate significant improvements in controllability while maintaining or improving generation quality across multiple benchmarks and tasks:
+                SteerDuplex pushes the open-source frontier substantially closer to proprietary systems on every benchmark targeting steerability, multi-turn robustness, and task-grounded duplex behavior—while preserving the streaming fidelity that motivates full-duplex modeling.
             </p>
 
             <!-- Summary Cards -->
             <div class="results-summary">
                 <div class="summary-card">
-                    <div class="metric">Controllability Improvement</div>
-                    <div class="value">+15.3%</div>
+                    <div class="metric">SteerBench APR Gain</div>
+                    <div class="value">+22.8</div>
                 </div>
                 <div class="summary-card">
-                    <div class="metric">Quality Maintenance (BLEU)</div>
-                    <div class="value">↑ 8.2</div>
+                    <div class="metric">Audio MultiChallenge ARS Gain</div>
+                    <div class="value">+7.9</div>
                 </div>
                 <div class="summary-card">
-                    <div class="metric">Inference Speed</div>
-                    <div class="value">2.1x</div>
+                    <div class="metric">SteerBench Size</div>
+                    <div class="value">390 / 1,067</div>
                 </div>
                 <div class="summary-card">
-                    <div class="metric">Human Eval Score</div>
-                    <div class="value">4.6/5.0</div>
+                    <div class="metric">Empty-Rollout Rate (composite)</div>
+                    <div class="value">4%</div>
                 </div>
             </div>
 
-            <!-- Main Results Table -->
-            <h3>Performance Comparison Across Tasks</h3>
+            <!-- Table 1: SteerBench -->
+            <h3>Table 1 — SteerBench Steerability (APR / TPR %, ↑)</h3>
+            <p class="table-note">Best open-source value per column in green. Proprietary baselines shown in grey for context.</p>
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
-                            <th>Task</th>
                             <th>Model</th>
-                            <th>Controllability</th>
-                            <th>BLEU</th>
-                            <th>ROUGE-L</th>
-                            <th>Human Eval</th>
+                            <th>Tone APR</th>
+                            <th>Tone TPR</th>
+                            <th>Persona APR</th>
+                            <th>Persona TPR</th>
+                            <th>Style&amp;Accent APR</th>
+                            <th>Style&amp;Accent TPR</th>
+                            <th>Speed&amp;Length APR</th>
+                            <th>Speed&amp;Length TPR</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td class="metric-name">Machine Translation</td>
-                            <td>Baseline</td>
-                            <td class="score">42.3%</td>
-                            <td class="score">28.5</td>
-                            <td class="score">0.512</td>
-                            <td class="score">3.8</td>
+                        <tr class="proprietary-row">
+                            <td class="metric-name">Gemini Live</td>
+                            <td class="score">45.0</td>
+                            <td class="score">68.5</td>
+                            <td class="score">41.0</td>
+                            <td class="score">70.0</td>
+                            <td class="score">73.3</td>
+                            <td class="score">74.7</td>
+                            <td class="score">52.8</td>
+                            <td class="score">76.9</td>
+                        </tr>
+                        <tr class="proprietary-row">
+                            <td class="metric-name">GPT-4o Realtime</td>
+                            <td class="score">49.0</td>
+                            <td class="score">90.6</td>
+                            <td class="score">42.6</td>
+                            <td class="score">93.3</td>
+                            <td class="score">60.4</td>
+                            <td class="score">94.3</td>
+                            <td class="score">77.4</td>
+                            <td class="score">96.2</td>
                         </tr>
                         <tr>
-                            <td class="metric-name">Machine Translation</td>
-                            <td>SteerDuplex</td>
-                            <td class="score best-score">58.7%</td>
-                            <td class="score best-score">31.2</td>
-                            <td class="score best-score">0.568</td>
-                            <td class="score best-score">4.7</td>
+                            <td class="metric-name">MOSHI</td>
+                            <td class="score">20.0</td>
+                            <td class="score">26.0</td>
+                            <td class="score">5.9</td>
+                            <td class="score">17.6</td>
+                            <td class="score">18.8</td>
+                            <td class="score">21.7</td>
+                            <td class="score best-score">39.6</td>
+                            <td class="score">29.5</td>
                         </tr>
                         <tr>
-                            <td class="metric-name">Paraphrase Generation</td>
-                            <td>Baseline</td>
-                            <td class="score">38.1%</td>
-                            <td class="score">24.7</td>
-                            <td class="score">0.485</td>
-                            <td class="score">3.6</td>
+                            <td class="metric-name">PersonaPlex</td>
+                            <td class="score">10.0</td>
+                            <td class="score best-score">60.6</td>
+                            <td class="score">0.7</td>
+                            <td class="score">39.0</td>
+                            <td class="score">13.4</td>
+                            <td class="score">37.6</td>
+                            <td class="score">35.8</td>
+                            <td class="score best-score">48.7</td>
                         </tr>
                         <tr>
-                            <td class="metric-name">Paraphrase Generation</td>
-                            <td>SteerDuplex</td>
-                            <td class="score best-score">54.9%</td>
-                            <td class="score best-score">27.3</td>
-                            <td class="score best-score">0.542</td>
-                            <td class="score best-score">4.5</td>
-                        </tr>
-                        <tr>
-                            <td class="metric-name">Summarization</td>
-                            <td>Baseline</td>
-                            <td class="score">45.6%</td>
+                            <td class="metric-name">SteerDuplex (ours)</td>
+                            <td class="score best-score">53.0</td>
+                            <td class="score">66.1</td>
+                            <td class="score best-score">43.4</td>
+                            <td class="score best-score">59.2</td>
+                            <td class="score best-score">47.0</td>
+                            <td class="score best-score">46.5</td>
                             <td class="score">32.1</td>
-                            <td class="score">0.498</td>
-                            <td class="score">3.9</td>
-                        </tr>
-                        <tr>
-                            <td class="metric-name">Summarization</td>
-                            <td>SteerDuplex</td>
-                            <td class="score best-score">61.2%</td>
-                            <td class="score best-score">35.8</td>
-                            <td class="score best-score">0.578</td>
-                            <td class="score best-score">4.8</td>
-                        </tr>
-                        <tr>
-                            <td class="metric-name">Dialogue Generation</td>
-                            <td>Baseline</td>
-                            <td class="score">40.2%</td>
-                            <td class="score">21.3</td>
-                            <td class="score">0.461</td>
-                            <td class="score">3.7</td>
-                        </tr>
-                        <tr>
-                            <td class="metric-name">Dialogue Generation</td>
-                            <td>SteerDuplex</td>
-                            <td class="score best-score">55.8%</td>
-                            <td class="score best-score">24.6</td>
-                            <td class="score best-score">0.531</td>
-                            <td class="score best-score">4.6</td>
+                            <td class="score">43.6</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+            <p>
+                SteerDuplex averages 43.9 APR (+22.8 over the strongest open baseline), with the largest lifts on tone (+33.0) and persona (+37.5) and a substantial gain on style/accent (+28.2). Speed/length is the one axis where MOSHI is already competitive (it tends to emit short responses), and we trade a small amount of length-control APR for stronger gains elsewhere. The audio-side TPR gains confirm the improvement reflects acoustic delivery changes, not merely tighter text-rubric alignment.
+            </p>
 
-            <!-- Task-specific breakdowns -->
-            <h3>Task-Specific Performance</h3>
-            <div class="task-comparison">
-                <div class="task-card">
-                    <h4>Machine Translation</h4>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Controllability Gain:</span>
-                        <span class="task-metric-value">+16.4%</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">BLEU Improvement:</span>
-                        <span class="task-metric-value">+2.7</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Human Preference:</span>
-                        <span class="task-metric-value">89%</span>
-                    </div>
-                </div>
-                <div class="task-card">
-                    <h4>Paraphrase Generation</h4>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Controllability Gain:</span>
-                        <span class="task-metric-value">+16.8%</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">BLEU Improvement:</span>
-                        <span class="task-metric-value">+2.6</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Human Preference:</span>
-                        <span class="task-metric-value">87%</span>
-                    </div>
-                </div>
-                <div class="task-card">
-                    <h4>Summarization</h4>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Controllability Gain:</span>
-                        <span class="task-metric-value">+15.6%</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">BLEU Improvement:</span>
-                        <span class="task-metric-value">+3.7</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Human Preference:</span>
-                        <span class="task-metric-value">91%</span>
-                    </div>
-                </div>
-                <div class="task-card">
-                    <h4>Dialogue Generation</h4>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Controllability Gain:</span>
-                        <span class="task-metric-value">+15.6%</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">BLEU Improvement:</span>
-                        <span class="task-metric-value">+3.3</span>
-                    </div>
-                    <div class="task-metric">
-                        <span class="task-metric-label">Human Preference:</span>
-                        <span class="task-metric-value">85%</span>
-                    </div>
-                </div>
+            <!-- Table 2: Audio MultiChallenge -->
+            <h3>Table 2 — Audio MultiChallenge (%, ↑)</h3>
+            <p class="table-note">Overall APR and ARS, plus per-axis APR: Inference Memory (IM), Instruction Retention (IR), Self-Coherence (SC), Voice Editing (VE). Proprietary baselines in grey.</p>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>System</th>
+                            <th>Overall APR</th>
+                            <th>ARS</th>
+                            <th>IM</th>
+                            <th>IR</th>
+                            <th>SC</th>
+                            <th>VE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="proprietary-row">
+                            <td class="metric-name">Gemini Live (2.5 Flash)</td>
+                            <td class="score">26.11</td>
+                            <td class="score">65.42</td>
+                            <td class="score">19.70</td>
+                            <td class="score">29.17</td>
+                            <td class="score">31.33</td>
+                            <td class="score">26.50</td>
+                        </tr>
+                        <tr class="proprietary-row">
+                            <td class="metric-name">GPT-4o Realtime</td>
+                            <td class="score">20.35</td>
+                            <td class="score">63.03</td>
+                            <td class="score">19.70</td>
+                            <td class="score">20.00</td>
+                            <td class="score">26.51</td>
+                            <td class="score">17.09</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">MOSHI</td>
+                            <td class="score">3.98</td>
+                            <td class="score">14.29</td>
+                            <td class="score">9.09</td>
+                            <td class="score">2.50</td>
+                            <td class="score">3.61</td>
+                            <td class="score">0.00</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">PersonaPlex</td>
+                            <td class="score">6.64</td>
+                            <td class="score">20.56</td>
+                            <td class="score">10.61</td>
+                            <td class="score best-score">6.67</td>
+                            <td class="score">9.64</td>
+                            <td class="score">0.00</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">SteerDuplex (ours)</td>
+                            <td class="score best-score">10.58</td>
+                            <td class="score best-score">22.19</td>
+                            <td class="score best-score">20.00</td>
+                            <td class="score">6.02</td>
+                            <td class="score best-score">15.49</td>
+                            <td class="score best-score">1.28</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
+            <p>
+                SteerDuplex lifts overall APR from 6.64 to 10.58 and ARS from 20.56 to 22.19 (+7.9 ARS). On inference memory it reaches 20.0 APR, matching Gemini Live's audio-output number (19.7), and voice editing—on which every prior open-source duplex model scores 0.00—moves off the floor to 1.28. The residual gap to closed systems isolates dimensions audio post-training alone cannot close, such as codec- and decoder-level control beneath the layers our recipe modifies.
+            </p>
+
+            <!-- Table 3: FDB v1 -->
+            <h3>Table 3 — Full-Duplex-Bench v1 (best open-source highlights)</h3>
+            <p class="table-note">Take-over rate (TOR), backchannel frequency / JSD against human distributions, and first-response latency.</p>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Pause TOR (Synthetic, ↓)</th>
+                            <th>Pause TOR (Candor, ↓)</th>
+                            <th>Backchannel JSD (↓)</th>
+                            <th>Turn-Taking TOR (↑)</th>
+                            <th>Interruption TOR (↑)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="metric-name">MOSHI</td>
+                            <td class="score">1.000</td>
+                            <td class="score">1.000</td>
+                            <td class="score">0.708</td>
+                            <td class="score best-score">1.000</td>
+                            <td class="score best-score">0.895</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">PersonaPlex</td>
+                            <td class="score">0.664</td>
+                            <td class="score">0.676</td>
+                            <td class="score">0.765</td>
+                            <td class="score">0.975</td>
+                            <td class="score best-score">0.945</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">SteerDuplex (ours)</td>
+                            <td class="score best-score">0.372</td>
+                            <td class="score best-score">0.565</td>
+                            <td class="score best-score">0.694</td>
+                            <td class="score">0.739</td>
+                            <td class="score">0.753</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>
+                FDB v1 acts as a guardrail on streaming behavior: SteerDuplex obtains the best open-source pause-handling take-over rate (0.372 synthetic, 0.565 Candor) and the best backchannel JSD (0.694), substantially exceeding PersonaPlex on every pause-related metric while keeping turn-taking on par with MOSHI. On FDB v2 (slow-examiner), the composite-reward recipe averages 4.06 over correction, entity tracking, and safety—surpassing both open baselines (MOSHI 2.78, PersonaPlex 1.16) and edging out GPT-4o Realtime on safety (4.29 vs. 4.14).
+            </p>
 
             <h3>Key Findings</h3>
             <ul>
-                <li><strong>Consistent Improvement:</strong> SteerDuplex shows significant improvements across all four tasks tested</li>
-                <li><strong>Controllability Gains:</strong> Average controllability improvement of 15.3%, enabling better constraint satisfaction</li>
-                <li><strong>Quality Preservation:</strong> Maintains competitive or superior quality metrics (BLEU, ROUGE-L) compared to baselines</li>
-                <li><strong>Human Evaluation:</strong> Strong human preference scores (85-91%) across all tasks, validating practical utility</li>
-                <li><strong>Robustness:</strong> Demonstrates stable performance across diverse NLP tasks and domains</li>
+                <li><strong>Steerability gains:</strong> +22.8 SteerBench APR over the strongest open baseline, with tone (+33.0), persona (+37.5), and style/accent (+28.2) seeing the largest lifts.</li>
+                <li><strong>Multi-turn robustness:</strong> +7.9 Audio MultiChallenge ARS, and voice editing moves off the 0.00 floor that every prior open-source duplex model sits at.</li>
+                <li><strong>Streaming preserved:</strong> KL-constrained small steps keep FDB v1 intact while FDB v2 climbs, so steering gains do not degrade interactive behavior.</li>
+                <li><strong>No single reward suffices:</strong> isolated probes leave 26–49% of rollouts empty and collapse duplex-FDB to zero; the multiplicative composite cuts the empty rate to 4%.</li>
+                <li><strong>Residual gap:</strong> the remaining 14–41-point gap to GPT-4o Realtime and Gemini Live reflects backbone scale, codec expressiveness, and judge supervision—pointing to joint backbone–codec scaling as a next step.</li>
             </ul>
+        </section>
+
+        <!-- Limitations Section -->
+        <section>
+            <h2>Limitations</h2>
+            <p>
+                SteerBench focuses on controlled English steering requests with fixed reference clips, and does not cover all languages, dialects, recording conditions, or long-horizon personalization. The audio-rubric judge depends on frontier multimodal evaluation, so absolute scores should be read alongside transcript validity, audio-health diagnostics, and downstream benchmarks. The model also inherits the latency, codec, and single-voice constraints of the Moshi-style backbone, bounding how far post-training alone can move the interaction frontier.
+            </p>
         </section>
 
         <!-- Citation Section -->
         <section>
             <h2>Citation</h2>
-            <p>If you use SteerDuplex in your research, please cite our work:</p>
+            <p>If you use SteerDuplex or SteerBench in your research, please cite our work:</p>
             <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto;">
-                <code>@inproceedings{steerduplex2024,<br>
-                &nbsp;&nbsp;title={SteerDuplex: Controllable Bidirectional Text Generation with Preference Steering},<br>
-                &nbsp;&nbsp;author={[Authors]},<br>
+                <code>@inproceedings{steerduplex,<br>
+                &nbsp;&nbsp;title={SteerDuplex: Steerable Duplex Speech Dialogue Models},<br>
+                &nbsp;&nbsp;author={Anonymous},<br>
                 &nbsp;&nbsp;booktitle={Proceedings of EMNLP},<br>
-                &nbsp;&nbsp;year={2024}<br>
+                &nbsp;&nbsp;year={2026}<br>
                 }</code>
             </div>
         </section>
 
         <!-- Resources Section -->
-        <section>
+        <!-- <section>
             <h2>Resources</h2>
-            <p>For more information, code, datasets, and supplementary materials:</p>
+            <p>Code, model checkpoints, and SteerBench will be released upon paper acceptance.</p>
             <ul>
-                <li><strong>GitHub Repository:</strong> <a href="https://github.com/audioanon/steerduplex" style="color: #667eea;">github.com/audioanon/steerduplex</a></li>
+                <li><strong>Project Page:</strong> <a href="https://audioanon.github.io/steerduplex/" style="color: #667eea;">audioanon.github.io/steerduplex</a></li>
             </ul>
-        </section>
+        </section> -->
     </div>
 
     <footer>
-        <p><strong>SteerDuplex</strong> - Controllable Bidirectional Text Generation</p>
-        <p>Published at EMNLP</p>
-        <p>&copy; 2024 All rights reserved. | <a href="https://github.com/audioanon/steerduplex">GitHub Repository</a></p>
+        <p><strong>SteerDuplex</strong> - Steerable Duplex Speech Dialogue Models</p>
+        <p>Anonymous submission to EMNLP</p>
+        <p>Project page: <a href="https://audioanon.github.io/steerduplex/">audioanon.github.io/steerduplex</a></p>
     </footer>
 </body>
 </html>
